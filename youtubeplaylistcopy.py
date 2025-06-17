@@ -10,9 +10,13 @@ from youtube_transcript_api import YouTubeTranscriptApi, NoTranscriptFound, Tran
 from dotenv import load_dotenv
 load_dotenv()
 
-# Load API keys from environment variables
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-YOUTUBE_API_KEY = os.environ.get("YOUTUBE_API_KEY")
+
+# # Load API keys from environment variables
+# GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+# YOUTUBE_API_KEY = os.environ.get("YOUTUBE_API_KEY")
+
+
+
 
 # --- Streamlit Page Configuration ---
 st.set_page_config(
@@ -21,7 +25,18 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("🎬 YouTube Playlist Summarizer")
+# Add API key input fields in the sidebar
+with st.sidebar:
+    st.header("API Configuration")
+    GEMINI_API_KEY = st.text_input("Gemini API Key", type="password")
+    YOUTUBE_API_KEY = st.text_input("YouTube API Key", type="password")
+    
+    if not GEMINI_API_KEY or not YOUTUBE_API_KEY:
+        st.warning("Please enter both API keys to use the application.")
+        st.stop()
+
+# --- Main Content ---
+st.title("🎵 YouTube Playlist Generator")
 st.markdown("""
 This application allows you to enter a YouTube playlist URL, extract all video links,
 fetch their transcripts (if available), and then summarize each video using the Gemini AI.
