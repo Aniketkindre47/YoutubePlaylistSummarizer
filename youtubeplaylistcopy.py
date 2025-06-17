@@ -4,7 +4,7 @@ import re
 import pandas as pd
 from googleapiclient.discovery import build
 import google.generativeai as genai
-from youtube_transcript_api import YouTubeTranscriptApi, NoTranscriptFound, TranscriptsDisabled
+
 
 # --- Configuration & API Key Setup ---
 from dotenv import load_dotenv
@@ -37,7 +37,7 @@ st.title("🎵 YouTube Playlist Generator")
 st.markdown(
     """
     This application allows you to enter a YouTube playlist URL, extract all video links,
-    fetch their transcripts (if available), and then summarize each video using the Gemini AI.
+    and then summarize each video using the Gemini AI.
     """
 )
 
@@ -62,7 +62,24 @@ if GEMINI_API_KEY:
             "top_k": 64,
             "max_output_tokens": 8192,
         },
-       
+        safety_settings=[
+            {
+                "category": "HARM_CATEGORY_HARASSMENT",
+                "threshold": "BLOCK_MEDIUM_AND_ABOVE",
+            },
+            {
+                "category": "HARM_CATEGORY_HATE_SPEECH",
+                "threshold": "BLOCK_MEDIUM_AND_ABOVE",
+            },
+            {
+                "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                "threshold": "BLOCK_MEDIUM_AND_ABOVE",
+            },
+            {
+                "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+                "threshold": "BLOCK_MEDIUM_AND_ABOVE",
+            },
+        ],
     )
 else:
     st.error(
@@ -129,34 +146,54 @@ def get_playlist_video_urls(playlist_id):
 
 
 @st.cache_data(show_spinner=False)  # Cache results
-def get_video_transcript(video_id):
-    """Fetches the transcript for a given YouTube video ID."""
+def get_video_details(video_id):
+    """Fetches video details using YouTube API."""
     try:
-        transcript_list = YouTubeTranscriptApi.get_transcript(video_id)
-        transcript = " ".join([item["text"] for item in transcript_list])
-        return transcript
-    except NoTranscriptFound:
-        return "No transcript found."
-    except TranscriptsDisabled:
-        return "Transcripts disabled for this video."
+        youtube = build('youtube', 'v3', developerKey=YOUTUBE_API_KEY)
+        request = youtube.videos().list(
+            part="snippet,contentDetails",
+            id=video_id
+        )
+        response = request.execute()
+        
+        if response['items']:
+            video = response['items'][0]
+            return {
+                'title': video['snippet']['title'],
+                'description': video['snippet']['description'],
+                'channel': video['snippet']['channelTitle'],
+                'published_at': video['snippet']['publishedAt']
+            }
+        return None
     except Exception as e:
-        return f"Error fetching transcript: {e}"
+        return None
 
 
 @st.cache_data(show_spinner=False)  # Cache results
-def summarize_text_with_gemini(text):
-    """Summarizes the given text using the Gemini API."""
+def summarize_text_with_gemini(url):
+    """Summarizes information about the video using Gemini."""
     if not gemini_model:
         return "Gemini model not initialized."
-    if text in [
-        "No transcript found.",
-        "Transcripts disabled for this video.",
-        "Error fetching transcript:",
-    ]:
-        return text  # Don't try to summarize error messages
 
-    prompt = f"Please provide a concise summary of the following text:\n\n{text}"
     try:
+        # Extract video ID from URL
+        video_id = url.split('/')[-1]
+        
+        # Get video details
+        video_details = get_video_details(video_id)
+        
+        if not video_details:
+            return "Could not fetch video details."
+
+        prompt = f"""Please provide a concise summary of this YouTube video based on its details:
+
+Title: {video_details['title']}
+Channel: {video_details['channel']}
+Published: {video_details['published_at']}
+Description: {video_details['description']}
+
+Please summarize the main topic and key points that might be covered in this video."""
+        
         response = gemini_model.generate_content(prompt)
         return response.text
     except Exception as e:
@@ -183,7 +220,7 @@ if st.button("Get Summaries"):
         else:
             st.subheader(f"Summaries for Playlist ID: `{playlist_id}`")
             st.info(
-                "Fetching video details and transcripts. This might take a while for large playlists..."
+                "Fetching video details and summarizing. This might take a while for large playlists..."
             )
 
             with st.spinner("Fetching videos from playlist..."):
@@ -201,7 +238,6 @@ if st.button("Get Summaries"):
                 status_text = st.empty()
 
                 for i, detail in enumerate(video_details):
-                    video_id = detail["video_id"]
                     video_title = detail["title"]
                     video_url = detail["url"]
 
@@ -209,27 +245,9 @@ if st.button("Get Summaries"):
                         f"Processing video {i+1}/{len(video_details)}: {video_title}"
                     )
 
-                    # Get transcript
-                    transcript = get_video_transcript(video_id)
-
-                    # Summarize
-                    summary = ""
-                    if (
-                        transcript
-                        and not transcript.startswith(
-                            (
-                                "No transcript found",
-                                "Transcripts disabled",
-                                "Error fetching",
-                            )
-                        )
-                    ):
-                        with st.spinner(f"Summarizing '{video_title}'..."):
-                            summary = summarize_text_with_gemini(transcript)
-                    else:
-                        summary = (
-                            transcript  # Set summary to the error message or "No transcript found"
-                        )
+                    # Summarize using URL
+                    with st.spinner(f"Summarizing '{video_title}'..."):
+                        summary = summarize_text_with_gemini(video_url)
 
                     new_row = pd.DataFrame(
                         [
