@@ -56,30 +56,6 @@ if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
     gemini_model = genai.GenerativeModel(
         model_name="gemini-1.5-flash",  # You can choose other models like 'gemini-pro'
-        generation_config={
-            "temperature": 0.7,
-            "top_p": 0.95,
-            "top_k": 64,
-            "max_output_tokens": 8192,
-        },
-        safety_settings=[
-            {
-                "category": "HARM_CATEGORY_HARASSMENT",
-                "threshold": "BLOCK_MEDIUM_AND_ABOVE",
-            },
-            {
-                "category": "HARM_CATEGORY_HATE_SPEECH",
-                "threshold": "BLOCK_MEDIUM_AND_ABOVE",
-            },
-            {
-                "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-                "threshold": "BLOCK_MEDIUM_AND_ABOVE",
-            },
-            {
-                "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
-                "threshold": "BLOCK_MEDIUM_AND_ABOVE",
-            },
-        ],
     )
 else:
     st.error(
@@ -189,7 +165,6 @@ def summarize_text_with_gemini(url):
 
 Title: {video_details['title']}
 Channel: {video_details['channel']}
-Published: {video_details['published_at']}
 Description: {video_details['description']}
 
 Please summarize the main topic and key points that might be covered in this video."""
